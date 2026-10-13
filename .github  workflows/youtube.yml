@@ -1,0 +1,36 @@
+name: Latest YouTube videos
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update README
+        run: |
+          python3 - <<'EOF'
+          import re, urllib.request
+          import xml.etree.ElementTree as ET
+          url = "https://www.youtube.com/feeds/videos.xml?channel_id=UCH_z5aL_2zsOCTKY2TshFUw"
+          root = ET.fromstring(urllib.request.urlopen(url).read())
+          ns = {"a": "http://www.w3.org/2005/Atom"}
+          lines = []
+          for e in root.findall("a:entry", ns)[:5]:
+              title = e.find("a:title", ns).text
+              link = e.find("a:link", ns).attrib["href"]
+              lines.append(f"- [{title}]({link})")
+          block = "<!-- YOUTUBE:START -->\n" + "\n".join(lines) + "\n<!-- YOUTUBE:END -->"
+          s = open("README.md", encoding="utf-8").read()
+          s = re.sub(r"<!-- YOUTUBE:START -->.*?<!-- YOUTUBE:END -->", lambda m: block, s, flags=re.S)
+          open("README.md", "w", encoding="utf-8").write(s)
+          EOF
+      - name: Commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add README.md
+          git diff --staged --quiet || (git commit -m "Update YouTube videos" && git push)
